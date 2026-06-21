@@ -4,28 +4,23 @@ import mediapipe as mp
 import gradio as gr
 
 # =====================================
-# MEDIAPIPE
+# Función para calcular ángulos
 # =====================================
-
-mp_pose = mp.solutions.pose
-mp_drawing = mp.solutions.drawing_utils
-
-# =====================================
-# UTILIDADES
-# =====================================
-
 def calcular_angulo(a, b, c):
 
     a = np.array(a)
     b = np.array(b)
     c = np.array(c)
 
-    radians = (
-        np.arctan2(c[1] - b[1], c[0] - b[0])
-        - np.arctan2(a[1] - b[1], a[0] - b[0])
+    radians = np.arctan2(
+        c[1] - b[1],
+        c[0] - b[0]
+    ) - np.arctan2(
+        a[1] - b[1],
+        a[0] - b[0]
     )
 
-    angulo = np.abs(radians * 180 / np.pi)
+    angulo = np.abs(radians * 180.0 / np.pi)
 
     if angulo > 180:
         angulo = 360 - angulo
@@ -33,265 +28,64 @@ def calcular_angulo(a, b, c):
     return angulo
 
 
-def obtener_punto(landmarks, punto):
-
-    return [
-        landmarks.landmark[punto].x,
-        landmarks.landmark[punto].y
-    ]
+# =====================================
+# Inicializar MediaPipe
+# =====================================
+mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
 
 
 # =====================================
-# DETECCIÓN DE EJERCICIOS
+# Función principal de análisis
 # =====================================
+def analizar_sentadilla(imagen):
 
-def detectar_ejercicio(landmarks):
-
-    hombro = obtener_punto(
-        landmarks,
-        mp_pose.PoseLandmark.LEFT_SHOULDER
-    )
-
-    cadera = obtener_punto(
-        landmarks,
-        mp_pose.PoseLandmark.LEFT_HIP
-    )
-
-    rodilla = obtener_punto(
-        landmarks,
-        mp_pose.PoseLandmark.LEFT_KNEE
-    )
-
-    tobillo = obtener_punto(
-        landmarks,
-        mp_pose.PoseLandmark.LEFT_ANKLE
-    )
-
-    codo = obtener_punto(
-        landmarks,
-        mp_pose.PoseLandmark.LEFT_ELBOW
-    )
-
-    muñeca = obtener_punto(
-        landmarks,
-        mp_pose.PoseLandmark.LEFT_WRIST
-    )
-
-    # ==========================
-    # Ángulos
-    # ==========================
-
-    angulo_rodilla = calcular_angulo(
-        cadera,
-        rodilla,
-        tobillo
-    )
-
-    angulo_codo = calcular_angulo(
-        hombro,
-        codo,
-        muñeca
-    )
-
-    angulo_cuerpo = calcular_angulo(
-        hombro,
-        cadera,
-        tobillo
-    )
-
-    # ==========================
-    # DEBUG
-    # ==========================
-
-    print("\n========== DEBUG ==========")
-    print("Rodilla:", round(angulo_rodilla, 1))
-    print("Codo:", round(angulo_codo, 1))
-    print("Cuerpo:", round(angulo_cuerpo, 1))
-    print("===========================\n")
-
-    # ==========================
-    # EJERCICIOS HORIZONTALES
-    # ==========================
-
-    if angulo_cuerpo > 150:
-
-        # PLANCHA
-
-        if angulo_codo > 150:
-            return "Plancha"
-
-        # FLEXION
-
-        if angulo_codo <= 150:
-            return "Flexión"
-
-    # ==========================
-    # EJERCICIOS VERTICALES
-    # ==========================
-
-    distancia_piernas = abs(
-        tobillo[0] - rodilla[0]
-    )
-
-    # ESTOCADA
-
-    if (
-        distancia_piernas > 0.15
-        and angulo_rodilla < 130
-    ):
-        return "Estocada"
-
-    # SENTADILLA
-
-    if angulo_rodilla < 150:
-        return "Sentadilla"
-
-    return "No reconocido"
-
-
-# =====================================
-# ANÁLISIS SENTADILLA
-# =====================================
-
-def analizar_sentadilla(angulo_rodilla):
-
-    if angulo_rodilla < 70:
-
-        return (
-            "⚠️ Sentadilla muy profunda",
-            "Controlá un poco más el descenso."
-        )
-
-    elif angulo_rodilla <= 110:
-
-        return (
-            "✅ Sentadilla correcta",
-            "Excelente técnica."
-        )
-
-    else:
-
-        return (
-            "⚠️ Sentadilla incompleta",
-            "Intentá bajar un poco más."
-        )
-
-
-# =====================================
-# ANÁLISIS ESTOCADA
-# =====================================
-
-def analizar_estocada(angulo_rodilla):
-
-    if 80 <= angulo_rodilla <= 110:
-
-        return (
-            "✅ Estocada correcta",
-            "Buena profundidad."
-        )
-
-    return (
-        "⚠️ Estocada mejorable",
-        "Intentá acercarte a los 90°."
-    )
-
-
-# =====================================
-# ANÁLISIS FLEXIÓN
-# =====================================
-
-def analizar_flexion(angulo_codo):
-
-    if angulo_codo < 90:
-
-        return (
-            "✅ Flexión correcta",
-            "Excelente profundidad."
-        )
-
-    return (
-        "⚠️ Flexión incompleta",
-        "Bajá un poco más el torso."
-    )
-
-
-# =====================================
-# ANÁLISIS PLANCHA
-# =====================================
-
-def analizar_plancha():
-
-    return (
-        "✅ Plancha detectada",
-        "Mantené la alineación corporal."
-    )
-
-
-# =====================================
-# FUNCIÓN PRINCIPAL
-# =====================================
-
-def analizar_ejercicio(imagen):
-
-    imagen_bgr = cv2.cvtColor(
-        imagen,
-        cv2.COLOR_RGB2BGR
-    )
+    imagen = cv2.cvtColor(imagen, cv2.COLOR_RGB2BGR)
+    imagen_rgb = cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB)
 
     with mp_pose.Pose(
         static_image_mode=True,
         min_detection_confidence=0.5
     ) as pose:
 
-        resultados = pose.process(imagen)
+        resultados = pose.process(imagen_rgb)
 
         if not resultados.pose_landmarks:
 
-            return imagen, """
-# ❌ No se detectó ninguna persona
-"""
+            return imagen_rgb, "❌ No se detectó ninguna persona"
 
         mp_drawing.draw_landmarks(
-            imagen_bgr,
+            imagen,
             resultados.pose_landmarks,
             mp_pose.POSE_CONNECTIONS
         )
 
-        landmarks = resultados.pose_landmarks
+        cadera = [
+            resultados.pose_landmarks.landmark[
+                mp_pose.PoseLandmark.LEFT_HIP
+            ].x,
+            resultados.pose_landmarks.landmark[
+                mp_pose.PoseLandmark.LEFT_HIP
+            ].y
+        ]
 
-        ejercicio = detectar_ejercicio(
-            landmarks
-        )
+        rodilla = [
+            resultados.pose_landmarks.landmark[
+                mp_pose.PoseLandmark.LEFT_KNEE
+            ].x,
+            resultados.pose_landmarks.landmark[
+                mp_pose.PoseLandmark.LEFT_KNEE
+            ].y
+        ]
 
-        hombro = obtener_punto(
-            landmarks,
-            mp_pose.PoseLandmark.LEFT_SHOULDER
-        )
-
-        cadera = obtener_punto(
-            landmarks,
-            mp_pose.PoseLandmark.LEFT_HIP
-        )
-
-        rodilla = obtener_punto(
-            landmarks,
-            mp_pose.PoseLandmark.LEFT_KNEE
-        )
-
-        tobillo = obtener_punto(
-            landmarks,
-            mp_pose.PoseLandmark.LEFT_ANKLE
-        )
-
-        codo = obtener_punto(
-            landmarks,
-            mp_pose.PoseLandmark.LEFT_ELBOW
-        )
-
-        muñeca = obtener_punto(
-            landmarks,
-            mp_pose.PoseLandmark.LEFT_WRIST
-        )
+        tobillo = [
+            resultados.pose_landmarks.landmark[
+                mp_pose.PoseLandmark.LEFT_ANKLE
+            ].x,
+            resultados.pose_landmarks.landmark[
+                mp_pose.PoseLandmark.LEFT_ANKLE
+            ].y
+        ]
 
         angulo_rodilla = calcular_angulo(
             cadera,
@@ -299,59 +93,50 @@ def analizar_ejercicio(imagen):
             tobillo
         )
 
-        angulo_codo = calcular_angulo(
-            hombro,
-            codo,
-            muñeca
-        )
+        if angulo_rodilla < 70:
 
-        # --------------------------------
-
-        if ejercicio == "Sentadilla":
-
-            estado, consejo = analizar_sentadilla(
-                angulo_rodilla
+            estado = "⚠️ Sentadilla muy profunda"
+            consejo = (
+                "Controlá el descenso para evitar "
+                "una flexión excesiva."
             )
 
-        elif ejercicio == "Estocada":
+        elif 70 <= angulo_rodilla <= 110:
 
-            estado, consejo = analizar_estocada(
-                angulo_rodilla
+            estado = "✅ Sentadilla correcta"
+            consejo = (
+                "Excelente técnica. "
+                "La profundidad es adecuada."
             )
 
-        elif ejercicio == "Flexión":
+        elif 110 < angulo_rodilla <= 140:
 
-            estado, consejo = analizar_flexion(
-                angulo_codo
+            estado = "⚠️ Sentadilla incompleta"
+            consejo = (
+                "Intentá bajar un poco más "
+                "hasta acercarte a los 90°."
             )
-
-        elif ejercicio == "Plancha":
-
-            estado, consejo = analizar_plancha()
 
         else:
 
-            estado = "❌ Ejercicio no reconocido"
+            estado = "❌ No se detecta una sentadilla"
             consejo = (
-                "Probá con una sentadilla, "
-                "estocada, flexión o plancha."
+                "Flexioná más las rodillas "
+                "y llevá la cadera hacia atrás."
             )
 
         resultado = f"""
-# 🏋️ Analizador de Ejercicios
-
-### Ejercicio detectado
-**{ejercicio}**
-
 ### Resultado
-{estado}
 
-### Recomendación
-{consejo}
+**Ángulo de rodilla:** {angulo_rodilla:.1f}°
+
+**Estado:** {estado}
+
+**Consejo:** {consejo}
 """
 
         imagen_salida = cv2.cvtColor(
-            imagen_bgr,
+            imagen,
             cv2.COLOR_BGR2RGB
         )
 
@@ -359,49 +144,26 @@ def analizar_ejercicio(imagen):
 
 
 # =====================================
-# INTERFAZ
+# Interfaz Gradio
 # =====================================
 
-css = """
-footer {
-    display:none;
-}
+demo = gr.Interface(
+    fn=analizar_sentadilla,
+    inputs=gr.Image(type="numpy"),
+    outputs=[
+        gr.Image(label="Pose detectada"),
+        gr.Markdown(label="Análisis")
+    ],
+    title="🏋️ Analizador de Sentadillas con MediaPipe",
+    description="""
+Subí una imagen realizando una sentadilla.
+La aplicación analizará la pose, calculará el ángulo de la rodilla
+y te dará una devolución sobre la técnica.
 """
+)
 
-with gr.Blocks(
-    css=css,
-    theme=gr.themes.Soft()
-) as demo:
-
-    gr.Markdown(
-        "# 🏋️ Analizador de Ejercicios"
+if __name__ == "__main__":
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860
     )
-
-    with gr.Row():
-
-        entrada = gr.Image(
-            type="numpy",
-            label="📸 Imagen"
-        )
-
-        salida_imagen = gr.Image(
-            label="🎯 Resultado"
-        )
-
-    salida_texto = gr.Markdown()
-
-    boton = gr.Button(
-        "Analizar",
-        variant="primary"
-    )
-
-    boton.click(
-        analizar_ejercicio,
-        inputs=entrada,
-        outputs=[
-            salida_imagen,
-            salida_texto
-        ]
-    )
-
-demo.launch()
